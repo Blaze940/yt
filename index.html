@@ -252,7 +252,8 @@
   .act.done { background: var(--text); color: #fff; border-color: var(--text); }
   .qr { display: grid; justify-items: center; gap: 12px; margin-top: 16px; padding: 18px; border-radius: 12px; background: var(--surface-2); animation: rise .35s var(--ease); }
   .qr-box { padding: 14px; background: #fff; border-radius: 12px; line-height: 0; box-shadow: var(--shadow); }
-  .qr-box img, .qr-box canvas { width: 180px; height: 180px; }
+  .qr-box img { width: 190px; height: 190px; display: block; image-rendering: pixelated; }
+  .qr-tip { color: var(--muted); font-size: 12.5px; text-align: center; }
 
   /* Masse & historique */
   textarea.mini { min-height: 150px; resize: vertical; font-family: var(--mono); font-size: 13.5px; line-height: 1.6; }
@@ -428,7 +429,8 @@
             </div>
             <div class="qr" id="qr" hidden>
               <div class="qr-box" id="qrBox"></div>
-              <button class="ghost" id="qrDl" type="button">Télécharger le PNG</button>
+              <button class="ghost" id="qrDl" type="button">Enregistrer l'image</button>
+              <small class="qr-tip">Sur mobile, tu peux aussi appuyer longuement sur le QR code.</small>
             </div>
           </div>
           <div class="warn" id="warn" hidden>Page ouverte en local : « ton-site.github.io » est un exemple. Mets la page en ligne pour obtenir de vrais liens.</div>
@@ -472,7 +474,7 @@
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <script>
 const THEMES = { rouge: "#FF385C", mint: "#22D3B6", violet: "#9B8CFF", coral: "#FF6B5A", gold: "#F5B942", sky: "#4FB3FF", rose: "#FF5FA2" };
 const $ = s => document.querySelector(s);
@@ -664,16 +666,18 @@ function initGenerator() {
     $("#qr").hidden = true;
     $("#copy").classList.remove("done"); $("#copy").querySelector("span").textContent = "Copier";
     if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) scramble(out, baseTxt, rest);
-    else out.innerHTML = `<span class="base">${esc(baseTxt)}</span><span class="hl">${esc(rest)}</span>`;
+    else { scrambleRun++; out.innerHTML = `<span class="base">${esc(baseTxt)}</span><span class="hl">${esc(rest)}</span>`; }
     if (animate) { burst($("#make")); saveHistory(info, current); }
   }
   $("#make").onclick = () => make(true);
   $("#src").addEventListener("keydown", e => { if (e.key === "Enter") make(true); });
 
+  let scrambleRun = 0;
   function scramble(el, base, rest) {
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789-_";
-    const total = rest.length; let frame = 0;
+    const total = rest.length, run = ++scrambleRun; let frame = 0;
     const tick = () => {
+      if (run !== scrambleRun) return;   // une nouvelle génération a pris le relais
       frame++;
       const done = Math.floor(frame * 1.6);
       let s = rest.slice(0, done);
@@ -717,17 +721,38 @@ function initGenerator() {
     if (navigator.share) { try { await navigator.share({ url: current }); } catch {} }
     else { await copyText(current); toast("Partage indisponible ici : lien copié"); }
   };
+  let qrBlob = null;
   $("#qrBtn").onclick = () => {
-    const box = $("#qrBox");
-    if (!window.QRCode) { toast("QR code indisponible hors ligne"); return; }
     if (!$("#qr").hidden) { $("#qr").hidden = true; return; }
-    box.innerHTML = "";
-    new QRCode(box, { text: current, width: 540, height: 540, colorDark: "#0B0D12", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
-    $("#qr").hidden = false;
+    if (typeof window.qrcode !== "function") { toast("QR code indisponible : vérifie ta connexion"); return; }
+    try {
+      const qr = qrcode(0, "M");            // 0 = taille automatique
+      qr.addData(current); qr.make();
+      const n = qr.getModuleCount(), cell = 16, margin = 4 * cell, size = n * cell + margin * 2;
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      const g = c.getContext("2d");
+      g.fillStyle = "#fff"; g.fillRect(0, 0, size, size);
+      g.fillStyle = "#222";
+      for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) g.fillRect(margin + k * cell, margin + r * cell, cell, cell);
+      const img = new Image(); img.src = c.toDataURL("image/png"); img.alt = "QR code du deep link";
+      $("#qrBox").replaceChildren(img);
+      qrBlob = null; c.toBlob(b => qrBlob = b, "image/png");
+      $("#qr").hidden = false;
+      if (!online) toast("Exemple local : ce QR pointe vers une fausse adresse");
+    } catch (e) { toast("Impossible de créer ce QR code"); }
   };
-  $("#qrDl").onclick = () => {
-    const c = $("#qrBox canvas"); if (!c) return;
-    const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = "deeplink-qr.png"; a.click();
+  $("#qrDl").onclick = async () => {
+    if (!qrBlob) return;
+    const file = new File([qrBlob], "deeplink-qr.png", { type: "image/png" });
+    // Sur iPhone/Android : menu de partage → « Enregistrer l'image »
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (e) { if (e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(qrBlob);
+    const a = document.createElement("a"); a.href = url; a.download = "deeplink-qr.png";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("QR code téléchargé");
   };
 
   /* ─── Historique (cet appareil uniquement) ─── */

@@ -11,7 +11,7 @@ Un clic, et l'app YouTube s'ouvre directement sur la bonne vidéo.
 ![Sans tracking](https://img.shields.io/badge/tracking-aucun-222222?style=for-the-badge)
 ![Statique](https://img.shields.io/badge/100%25-statique-FF385C?style=for-the-badge)
 
-**👉 [Ouvrir le générateur](https://blaze940.github.io/yt/)**
+**👉 [Ouvrir le générateur](https://blaze940.github.io/NOM-DU-DEPOT/)**
 
 </div>
 
@@ -56,6 +56,10 @@ Un clic, et l'app YouTube s'ouvre directement sur la bonne vidéo.
 
 <div align="center">
 
-Fait avec ❤️ · Projet indépendant, non affilié à YouTube ni à Google
+Fait avec ❤️ par **Anonymuzz**
+
+[▶️ YouTube](https://www.youtube.com/@Anonymuzz_) · [📸 Instagram](https://www.instagram.com/anonymuzz.off/) · [🎵 TikTok](https://www.tiktok.com/@anonymuzz.off)
+
+<sub>Projet indépendant, non affilié à YouTube ni à Google</sub>
 
 </div>

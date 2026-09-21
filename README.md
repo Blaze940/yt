@@ -28,6 +28,7 @@ Un clic, et l'app YouTube s'ouvre directement sur la bonne vidéo.
 | 📱 **QR code** | À enregistrer et partager en un tap |
 | 🕘 **Historique** | Tes derniers liens, gardés sur ton appareil |
 | 🎨 **Personnalisation** | 7 couleurs pour la page d'ouverture |
+| 📲 **App installable** | Sur iPhone et Android, depuis l'écran d'accueil |
 | 🔒 **Zéro donnée** | Aucun compte, aucun suivi, rien n'est envoyé |
 
 ## 🚀 Comment ça marche
@@ -51,6 +52,9 @@ Un clic, et l'app YouTube s'ouvre directement sur la bonne vidéo.
 |---|---|
 | `index.html` | 🛠️ Le générateur et la page de redirection |
 | `404.html` | ✂️ Copie de `index.html`, nécessaire pour les liens courts |
+| `manifest.webmanifest` | 📲 Fiche de l'app (nom, icônes, couleurs) |
+| `sw.js` | ⚡ Rend l'app installable et utilisable hors connexion |
+| `icon-192.png` · `icon-512.png` · `apple-touch-icon.png` | 🎨 Icônes de l'app |
 
 ---
 

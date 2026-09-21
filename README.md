@@ -1,2 +1,0 @@
-# yt
-Deep link generator

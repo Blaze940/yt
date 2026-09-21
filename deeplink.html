@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<script>
+// Redirection immédiate, avant tout affichage : c'est ce qui rend l'ouverture rapide
+(function () {
+  var to = new URLSearchParams(location.search).get("to");
+  if (!to) return;
+  var web = "https://www.youtube.com/" + to;
+  var ua = navigator.userAgent;
+  var app = web;
+  if (/Android/i.test(ua)) {
+    app = "intent://www.youtube.com/" + to +
+          "#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=" +
+          encodeURIComponent(web) + ";end";
+  } else if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    app = "youtube://www.youtube.com/" + to;
+  }
+  window.__yt = { app: app, web: web };
+  location.replace(app);
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube Deep Link</title>
+<style>
+  :root { --bg:#0f0f0f; --card:#1c1c1c; --text:#f1f1f1; --muted:#aaa; --red:#ff0033; --border:#333; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text);
+         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .card { width:100%; max-width:520px; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  p { color:var(--muted); line-height:1.5; margin:0 0 16px; }
+  input { width:100%; padding:14px; border-radius:10px; border:1px solid var(--border); background:#111; color:var(--text); font-size:16px; }
+  button, .btn { display:block; width:100%; margin-top:12px; padding:14px; border:0; border-radius:10px; background:var(--red);
+         color:#fff; font-size:16px; font-weight:600; cursor:pointer; text-align:center; text-decoration:none; }
+  .btn.secondary { background:#333; }
+  .out { margin-top:16px; padding:12px; background:#111; border-radius:10px; word-break:break-all; font-family:monospace; font-size:14px; display:none; }
+  .err { color:#ff6b6b; margin-top:10px; display:none; }
+  .warn { color:#ffcc66; font-size:13px; margin-top:14px; display:none; }
+  .logo { width:56px; height:40px; background:var(--red); border-radius:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
+  .logo:after { content:""; border-left:16px solid #fff; border-top:10px solid transparent; border-bottom:10px solid transparent; margin-left:4px; }
+  .center { text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- Mode générateur -->
+<div class="card" id="gen" style="display:none">
+  <h1>YouTube Deep Link</h1>
+  <p>Colle un lien YouTube (vidéo, Short, chaîne, playlist, live). Le lien généré ouvrira directement l'app YouTube depuis Instagram, TikTok, etc.</p>
+  <input id="src" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+  <button id="make">Générer le deep link</button>
+  <div class="err" id="err">Lien YouTube non reconnu.</div>
+  <div class="out" id="out"></div>
+  <button id="copy" class="secondary" style="display:none">Copier</button>
+  <div class="warn" id="warn">⚠️ Page ouverte en local : « TON-SITE » est un exemple. Mets la page en ligne (Netlify, GitHub Pages…) pour obtenir de vrais liens qui fonctionnent.</div>
+</div>
+
+<!-- Mode redirection -->
+<div class="card center" id="redir" style="display:none">
+  <div class="logo"></div>
+  <h1>Ouverture de YouTube…</h1>
+  <p>Si l'application ne s'ouvre pas automatiquement, appuie sur le bouton.</p>
+  <a class="btn" id="openApp" href="#">Ouvrir dans l'app YouTube</a>
+  <a class="btn secondary" id="openWeb" href="#">Regarder dans le navigateur</a>
+</div>
+
+<script>
+// Transforme n'importe quel lien YouTube en chemin normalisé (ex: "watch?v=ID", "shorts/ID", "@chaine")
+function toPath(input) {
+  let s = (input || "").trim();
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+  let u;
+  try { u = new URL(s); } catch { return null; }
+  const host = u.hostname.replace(/^(www\.|m\.|music\.)/, "");
+  if (host === "youtu.be") {
+    const id = u.pathname.slice(1).split("/")[0];
+    if (!id) return null;
+    const t = u.searchParams.get("t");
+    return "watch?v=" + id + (t ? "&t=" + t : "");
+  }
+  if (host !== "youtube.com") return null;
+  const path = u.pathname.replace(/^\/+/, "");
+  if (path === "watch") {
+    const v = u.searchParams.get("v");
+    if (!v) return null;
+    const keep = new URLSearchParams({ v });
+    ["t", "list"].forEach(k => u.searchParams.get(k) && keep.set(k, u.searchParams.get(k)));
+    return "watch?" + keep.toString();
+  }
+  if (path === "playlist") {
+    const list = u.searchParams.get("list");
+    return list ? "playlist?list=" + list : null;
+  }
+  if (/^(shorts|live|embed)\//.test(path)) {
+    const [kind, id] = path.split("/");
+    return kind === "embed" ? "watch?v=" + id : kind + "/" + id;
+  }
+  if (/^(@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)/.test(path)) return path.replace(/\/$/, "");
+  return path ? path : null;
+}
+
+const params = new URLSearchParams(location.search);
+const target = params.get("to");
+
+if (target) {
+  // ---------- REDIRECTION (déjà lancée dans <head>, ici on affiche juste les boutons de secours) ----------
+  document.getElementById("redir").style.display = "block";
+  document.getElementById("openApp").href = window.__yt.app;
+  document.getElementById("openWeb").href = window.__yt.web;
+} else {
+  // ---------- GÉNÉRATEUR ----------
+  document.getElementById("gen").style.display = "block";
+  // En local / dans un aperçu, il n'y a pas de vraie adresse : on met un exemple à remplacer
+  const isOnline = /^https?:$/.test(location.protocol) && location.origin !== "null";
+  const base = isOnline ? location.origin + location.pathname : "https://TON-SITE.netlify.app/";
+  if (!isOnline) document.getElementById("warn").style.display = "block";
+
+  const src = document.getElementById("src"), out = document.getElementById("out"),
+        err = document.getElementById("err"), copy = document.getElementById("copy");
+
+  function make() {
+    const path = toPath(src.value);
+    if (!path) { err.style.display = "block"; out.style.display = copy.style.display = "none"; return; }
+    err.style.display = "none";
+    const link = base + "?to=" + encodeURIComponent(path);
+    out.textContent = link;
+    out.style.display = copy.style.display = "block";
+    copy.textContent = "Copier";
+  }
+  document.getElementById("make").onclick = make;
+  src.addEventListener("keydown", e => e.key === "Enter" && make());
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(out.textContent); copy.textContent = "Copié ✓"; }
+    catch {
+      // Repli si le presse-papiers est bloqué
+      const r = document.createRange(); r.selectNodeContents(out);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      copy.textContent = document.execCommand("copy") ? "Copié ✓" : "Lien sélectionné : fais Cmd/Ctrl + C";
+    }
+  };
+}
+</script>
+</body>
+</html>

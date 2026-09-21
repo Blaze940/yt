@@ -5,17 +5,39 @@
 <script>
 // Redirection immédiate, avant tout affichage : c'est ce qui rend l'ouverture rapide
 (function () {
-  var to = new URLSearchParams(location.search).get("to");
-  if (!to) return;
-  var web = "https://www.youtube.com/" + to;
+  var q = new URLSearchParams(location.search);
+  var ok = /^[A-Za-z0-9_-]+$/;          // IDs YouTube : aucun caractère spécial possible
+  var path = null, v = q.get("v"), list = q.get("list");
+  if (v && ok.test(v)) {
+    path = "watch?v=" + v;
+    var t = q.get("t");
+    if (t && /^[0-9hms]+$/.test(t)) path += "&t=" + t;
+    if (list && ok.test(list)) path += "&list=" + list;
+  } else if (q.get("s") && ok.test(q.get("s"))) {
+    path = "shorts/" + q.get("s");
+  } else if (q.get("live") && ok.test(q.get("live"))) {
+    path = "live/" + q.get("live");
+  } else if (list && ok.test(list)) {
+    path = "playlist?list=" + list;
+  } else if (q.get("c") && /^(@[\w.-]+|(channel|c|user)\/[\w.-]+)$/.test(q.get("c"))) {
+    path = q.get("c");
+  } else if (q.get("to")) {
+    // Anciens liens ?to=... : on décode autant de fois que nécessaire (Instagram ré-encode parfois)
+    var to = q.get("to");
+    for (var i = 0; i < 3 && /%[0-9A-Fa-f]{2}/.test(to); i++) to = decodeURIComponent(to);
+    if (/^[\w@\/?=&.-]+$/.test(to)) path = to;
+  }
+  if (!path) return;
+
+  var web = "https://www.youtube.com/" + path;
   var ua = navigator.userAgent;
   var app = web;
   if (/Android/i.test(ua)) {
-    app = "intent://www.youtube.com/" + to +
+    app = "intent://www.youtube.com/" + path +
           "#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=" +
           encodeURIComponent(web) + ";end";
   } else if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
-    app = "youtube://www.youtube.com/" + to;
+    app = "youtube://www.youtube.com/" + path;
   }
   window.__yt = { app: app, web: web };
   location.replace(app);
@@ -102,10 +124,16 @@ function toPath(input) {
   return path ? path : null;
 }
 
-const params = new URLSearchParams(location.search);
-const target = params.get("to");
+// Chemin YouTube -> paramètres courts et sans encodage (ex: "watch?v=ID" -> "v=ID")
+function toQuery(path) {
+  if (path.startsWith("watch?")) return path.slice(6);
+  if (path.startsWith("playlist?")) return path.slice(9);
+  const m = path.match(/^(shorts|live)\/([\w-]+)/);
+  if (m) return (m[1] === "shorts" ? "s=" : "live=") + m[2];
+  return "c=" + path;
+}
 
-if (target) {
+if (window.__yt) {
   // ---------- REDIRECTION (déjà lancée dans <head>, ici on affiche juste les boutons de secours) ----------
   document.getElementById("redir").style.display = "block";
   document.getElementById("openApp").href = window.__yt.app;
@@ -125,7 +153,7 @@ if (target) {
     const path = toPath(src.value);
     if (!path) { err.style.display = "block"; out.style.display = copy.style.display = "none"; return; }
     err.style.display = "none";
-    const link = base + "?to=" + encodeURIComponent(path);
+    const link = base + "?" + toQuery(path);
     out.textContent = link;
     out.style.display = copy.style.display = "block";
     copy.textContent = "Copier";

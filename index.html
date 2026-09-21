@@ -3,172 +3,798 @@
 <head>
 <meta charset="UTF-8">
 <script>
-// Redirection immédiate, avant tout affichage : c'est ce qui rend l'ouverture rapide
+// ─── Redirection immédiate, avant tout affichage ─────────────────────────────
+// Formats acceptés :  ?v=ID  ?s=ID  ?live=ID  ?list=ID  ?c=@chaine  (+ t, o, th, n)
+//                     /v/ID  /s/ID  /live/ID  /list/ID  /@chaine   (+ /libellé)
+//                     ?to=...  (anciens liens)
 (function () {
   var q = new URLSearchParams(location.search);
-  var ok = /^[A-Za-z0-9_-]+$/;          // IDs YouTube : aucun caractère spécial possible
-  var path = null, v = q.get("v"), list = q.get("list");
+  var p = location.pathname, m;
+  if ((m = p.match(/\/(v|s|live|list)\/([A-Za-z0-9_-]+)(?:\/[\w-]*)?\/?$/))) q.set(m[1], m[2]);
+  else if ((m = p.match(/\/(@[\w.-]+)(?:\/[\w-]*)?\/?$/))) q.set("c", m[1]);
+
+  var ok = /^[A-Za-z0-9_-]+$/;
+  var path = null, id = null, v = q.get("v"), list = q.get("list");
   if (v && ok.test(v)) {
-    path = "watch?v=" + v;
+    id = v; path = "watch?v=" + v;
     var t = q.get("t");
     if (t && /^[0-9hms]+$/.test(t)) path += "&t=" + t;
     if (list && ok.test(list)) path += "&list=" + list;
   } else if (q.get("s") && ok.test(q.get("s"))) {
-    path = "shorts/" + q.get("s");
+    id = q.get("s"); path = "shorts/" + id;
   } else if (q.get("live") && ok.test(q.get("live"))) {
-    path = "live/" + q.get("live");
+    id = q.get("live"); path = "live/" + id;
   } else if (list && ok.test(list)) {
     path = "playlist?list=" + list;
   } else if (q.get("c") && /^(@[\w.-]+|(channel|c|user)\/[\w.-]+)$/.test(q.get("c"))) {
     path = q.get("c");
   } else if (q.get("to")) {
-    // Anciens liens ?to=... : on décode autant de fois que nécessaire (Instagram ré-encode parfois)
     var to = q.get("to");
     for (var i = 0; i < 3 && /%[0-9A-Fa-f]{2}/.test(to); i++) to = decodeURIComponent(to);
     if (/^[\w@\/?=&.-]+$/.test(to)) path = to;
+    var mv = to.match(/v=([A-Za-z0-9_-]+)/); if (mv) id = mv[1];
   }
   if (!path) return;
 
   var web = "https://www.youtube.com/" + path;
   var ua = navigator.userAgent;
+  var isAndroid = /Android/i.test(ua);
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var inApp = /Instagram|FBAN|FBAV|FB_IAB|musical_ly|BytedanceWebview|TikTok|Snapchat|LinkedInApp|Threads/i.test(ua);
   var app = web;
-  if (/Android/i.test(ua)) {
+  if (isAndroid) {
     app = "intent://www.youtube.com/" + path +
           "#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=" +
           encodeURIComponent(web) + ";end";
-  } else if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+  } else if (isIOS) {
     app = "youtube://www.youtube.com/" + path;
   }
-  window.__yt = { app: app, web: web };
+  // Option « sans pop-up » : hors Instagram/TikTok, on laisse iOS/Android ouvrir le lien web normal
+  if (q.get("o") === "w" && !inApp) app = web;
+
+  window.__yt = { app: app, web: web, id: id, th: q.get("th") };
+  document.documentElement.className = "is-redirect";
   location.replace(app);
 })();
 </script>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>YouTube Deep Link</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deeplnk</title>
+<meta name="description" content="Crée des liens YouTube qui s'ouvrent directement dans l'app, même depuis Instagram et TikTok.">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-  :root { --bg:#0f0f0f; --card:#1c1c1c; --text:#f1f1f1; --muted:#aaa; --red:#ff0033; --border:#333; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text);
-         min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; }
-  .card { width:100%; max-width:520px; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; }
-  h1 { font-size:22px; margin:0 0 6px; }
-  p { color:var(--muted); line-height:1.5; margin:0 0 16px; }
-  input { width:100%; padding:14px; border-radius:10px; border:1px solid var(--border); background:#111; color:var(--text); font-size:16px; }
-  button, .btn { display:block; width:100%; margin-top:12px; padding:14px; border:0; border-radius:10px; background:var(--red);
-         color:#fff; font-size:16px; font-weight:600; cursor:pointer; text-align:center; text-decoration:none; }
-  .btn.secondary { background:#333; }
-  .out { margin-top:16px; padding:12px; background:#111; border-radius:10px; word-break:break-all; font-family:monospace; font-size:14px; display:none; }
-  .err { color:#ff6b6b; margin-top:10px; display:none; }
-  .warn { color:#ffcc66; font-size:13px; margin-top:14px; display:none; }
-  .logo { width:56px; height:40px; background:var(--red); border-radius:12px; display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
-  .logo:after { content:""; border-left:16px solid #fff; border-top:10px solid transparent; border-bottom:10px solid transparent; margin-left:4px; }
-  .center { text-align:center; }
+  @property --ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+  /* Palette claire, douce, à la Airbnb (thème unique assumé) */
+  :root {
+    --ground: #FFFFFF;
+    --surface: #FFFFFF;
+    --surface-2: #F7F7F7;
+    --line: #DDDDDD;
+    --line-soft: #EBEBEB;
+    --text: #222222;
+    --muted: #6A6A6A;
+    --accent: #FF385C;
+    --accent-deep: #E31C5F;
+    --accent-dark: #D70466;
+    --accent-soft: #FFF0F3;
+    --accent-ink: #FFFFFF;
+    --danger: #C13515;
+    --glow: rgba(255, 56, 92, .16);
+    --shadow: 0 6px 16px rgba(0, 0, 0, .12);
+    --shadow-lg: 0 6px 20px rgba(0, 0, 0, .2);
+    --shadow-card: 0 0 0 1px rgba(0,0,0,.04), 0 8px 28px rgba(0, 0, 0, .10);
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --ease: cubic-bezier(.2, 0, 0, 1);
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; color-scheme: light; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--ground); color: var(--text);
+    font: 16px/1.5 var(--body); padding-inline: 16px; overflow-x: hidden;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; border-radius: 8px; }
+  img { max-width: 100%; }
+  code { font-family: var(--mono); font-size: .92em; }
+
+  /* ─── En-tête ─── */
+  .topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: rgba(255,255,255,.92); backdrop-filter: saturate(180%) blur(16px);
+            border-bottom: 1px solid var(--line-soft); margin-inline: -16px; padding-inline: 16px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 76px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 22px; letter-spacing: -.03em; text-decoration: none; color: var(--accent); }
+  .brand svg { width: 30px; height: 30px; }
+  .pill { font-size: 14px; font-weight: 600; color: var(--text); padding: 10px 16px; border-radius: 99px; white-space: nowrap; transition: background .2s; display: flex; align-items: center; gap: 8px; }
+  .pill:hover { background: var(--surface-2); }
+  .pill svg { width: 16px; height: 16px; color: var(--accent); }
+  @media (max-width: 460px) { .pill span { display: none; } }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 72px; align-items: start; padding-block: 48px 72px; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 24px 48px; } }
+
+  /* ─── Colonne gauche ─── */
+  .hero { display: grid; gap: 32px; }
+  .eyebrow { font-size: 14px; color: var(--muted); font-weight: 500; }
+  h1 { font-weight: 800; font-size: clamp(32px, 4.6vw, 52px); line-height: 1.06; letter-spacing: -.035em; margin: 8px 0 0; text-wrap: balance; }
+  h1 .shift { color: var(--accent); }
+  .lede { color: var(--muted); font-size: 18px; max-width: 44ch; margin: 0; }
+  hr.sep { border: 0; border-top: 1px solid var(--line-soft); margin: 0; }
+
+  /* Parcours Instagram → lien → App YouTube */
+  .route { position: relative; display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; align-items: start; padding: 4px 6px; }
+  .route .track { position: absolute; left: 52px; right: 52px; top: 27px; height: 2px; background: var(--line-soft); border-radius: 2px; overflow: hidden; }
+  .route .spark { position: absolute; top: 0; left: 0; height: 100%; width: 30%; border-radius: 2px;
+                  background: linear-gradient(90deg, transparent, var(--accent)); animation: travel 2.8s var(--ease) infinite; }
+  @keyframes travel { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  .node { position: relative; z-index: 1; display: grid; justify-items: center; gap: 10px; font-size: 13px; color: var(--muted); font-weight: 600; text-align: center; }
+  .node i { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line); font-style: normal; box-shadow: 0 2px 4px rgba(0,0,0,.04); }
+  .node svg { width: 24px; height: 24px; color: var(--text); }
+  .node.mid i { background: var(--accent); border-color: var(--accent); box-shadow: 0 8px 20px -6px rgba(255,56,92,.55); animation: bob 2.8s var(--ease) infinite; }
+  .node.mid svg { color: #fff; }
+  .node.end i { animation: land 2.8s var(--ease) infinite; }
+  @keyframes bob { 45%, 55% { transform: translateY(-3px); } }
+  @keyframes land { 85%, 100% { border-color: var(--text); box-shadow: 0 0 0 4px var(--surface-2); } }
+
+  .facts { display: grid; gap: 22px; }
+  .fact { display: grid; grid-template-columns: 28px 1fr; gap: 18px; align-items: start; }
+  .fact svg { width: 26px; height: 26px; color: var(--text); margin-top: 2px; }
+  .fact strong { display: block; font-size: 16px; font-weight: 600; }
+  .fact span { font-size: 14px; color: var(--muted); }
+
+  .how { display: grid; gap: 14px; }
+  .how h2 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
+  .step { display: grid; grid-template-columns: 32px 1fr; gap: 14px; font-size: 15px; color: var(--muted); align-items: start; }
+  .step b { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; color: var(--text); background: var(--surface-2); }
+  .step strong { color: var(--text); font-weight: 600; }
+  .more { display: grid; gap: 32px; }
+  main { grid-template-areas: "hero tool" "more tool"; grid-template-rows: auto 1fr; row-gap: 40px; }
+  .hero { grid-area: hero; } .more { grid-area: more; } .tool { grid-area: tool; }
+  @media (max-width: 900px) { main { grid-template-areas: "hero" "tool" "more"; grid-template-rows: auto; row-gap: 32px; } }
+
+  /* ─── Carte outil ─── */
+  .tool { position: sticky; top: 100px; }
+  @media (max-width: 900px) { .tool { position: static; } }
+  .tool-in { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-card); padding: 24px; }
+  @media (max-width: 420px) { .tool-in { padding: 18px; } }
+
+  .tabs { position: relative; display: flex; gap: 28px; border-bottom: 1px solid var(--line-soft); margin-bottom: 22px; }
+  .tabs button { position: relative; border: 0; background: none; padding: 4px 0 14px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--muted); cursor: pointer; transition: color .2s; }
+  .tabs button svg { width: 18px; height: 18px; transition: transform .3s var(--ease); }
+  .tabs button:hover { color: var(--text); }
+  .tabs button:hover svg { transform: translateY(-2px); }
+  .tabs button[aria-selected="true"] { color: var(--text); }
+  .tabs .ind { position: absolute; bottom: -1px; left: 0; height: 2px; background: var(--text); border-radius: 2px; transition: transform .4s var(--ease), width .4s var(--ease); }
+  .panel { animation: rise .35s var(--ease); }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+  /* Champ façon barre de recherche */
+  .field { position: relative; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 10px 8px 10px 16px; transition: border-color .2s, box-shadow .2s; }
+  .field:hover { box-shadow: var(--shadow); }
+  .field:focus-within { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+  .field .fl { flex: 1; min-width: 0; display: grid; }
+  .field label { font-size: 12px; font-weight: 700; color: var(--text); }
+  .field input { min-width: 0; border: 0; background: none; outline: none; padding: 2px 0 0; font-size: 15px; color: var(--text); }
+  .field input::placeholder { color: var(--muted); }
+  .ghost { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: transform .1s, background .2s, border-color .2s; color: var(--text); }
+  .ghost:hover { background: var(--surface-2); border-color: var(--text); }
+  .ghost:active { transform: scale(.96); }
+
+  .detect { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 10px; border-radius: 12px; background: var(--surface-2); transition: background .3s; }
+  .detect.on { background: var(--surface-2); }
+  .detect.bad { background: #FFF5F3; }
+  .detect.bad .meta strong { color: var(--danger); }
+  .thumb { width: 84px; aspect-ratio: 16/9; border-radius: 8px; background: var(--line-soft) center/cover no-repeat; flex: none; display: grid; place-items: center; color: var(--muted); overflow: hidden; transition: transform .4s var(--ease); }
+  .detect:hover .thumb { transform: scale(1.04); }
+  .thumb svg { width: 22px; height: 22px; }
+  .detect .meta { min-width: 0; }
+  .detect .meta strong { display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .detect .meta span { font-size: 13px; color: var(--muted); }
+  .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); margin-right: 6px; animation: pop .4s cubic-bezier(.3, 1.5, .5, 1); }
+  @keyframes pop { from { transform: scale(.5); opacity: 0; } }
+
+  /* Options */
+  details.opts { margin-top: 16px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+  details.opts summary { list-style: none; cursor: pointer; padding: 16px 2px; display: flex; gap: 10px; align-items: center; font-weight: 600; font-size: 15px; }
+  details.opts summary::-webkit-details-marker { display: none; }
+  details.opts summary .count { color: var(--muted); font-weight: 500; font-size: 14px; margin-left: auto; }
+  details.opts summary svg { width: 16px; height: 16px; transition: transform .3s var(--ease); }
+  details.opts[open] summary svg { transform: rotate(180deg); }
+  .opt-grid { display: grid; gap: 20px; padding: 2px 2px 20px; animation: rise .3s var(--ease); }
+  .opt-grid .row { display: grid; gap: 8px; }
+  .opt-grid .row > span { font-size: 14px; font-weight: 600; }
+  .opt-grid small { color: var(--muted); font-size: 13px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 8px 16px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; transition: border-color .2s, background .2s, transform .1s; }
+  .seg button:hover { border-color: var(--text); }
+  .seg button:active { transform: scale(.96); }
+  .seg button[aria-pressed="true"] { border-color: var(--text); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--text); font-weight: 600; }
+  .mini { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; font-size: 15px; width: 100%; outline: none; transition: border-color .2s, box-shadow .2s; }
+  .mini:focus { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+  .mini.mono { font-family: var(--mono); font-size: 14px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 420px) { .two { grid-template-columns: 1fr; } }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+  .sw { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; transition: transform .2s var(--ease), box-shadow .2s; }
+  .sw:hover { transform: scale(1.08); }
+  .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--text); }
+
+  /* Bouton principal façon « Réserver » : dégradé + reflet qui suit la souris */
+  .cta { position: relative; overflow: hidden; width: 100%; margin-top: 20px; border: 0; border-radius: 8px; padding: 14px 24px; min-height: 50px; cursor: pointer;
+         font-weight: 600; font-size: 16px; color: #fff; display: flex; align-items: center; justify-content: center; gap: 10px;
+         background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), #FF385C 0%, #E61E4D 27.5%, #E31C5F 40%, #D70466 57.5%, #BD1E59 75%, #BD1E59 100%);
+         background-size: 200% 200%; background-position: calc((100 - var(--px, 50)) * 1%) calc((100 - var(--py, 50)) * 1%);
+         transition: transform .1s var(--ease), box-shadow .2s; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .cta:hover { box-shadow: 0 6px 18px -6px rgba(215, 4, 102, .6); }
+  .cta:active { transform: scale(.97); }
+  .cta svg { width: 18px; height: 18px; transition: transform .3s var(--ease); }
+  .cta:hover svg { transform: translateX(3px) rotate(-8deg); }
+  .particle { position: fixed; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; z-index: 50; }
+
+  /* Résultat */
+  .result { margin-top: 20px; animation: rise .4s var(--ease); }
+  .result .link { font-family: var(--mono); font-size: 14px; word-break: break-all; line-height: 1.55; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); margin-bottom: 12px; }
+  .result .link .base { color: var(--muted); }
+  .result .link .hl { color: var(--accent-deep); font-weight: 500; }
+  .actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .act { display: grid; justify-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 12px 4px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform .1s, border-color .2s, background .2s, box-shadow .2s; color: var(--text); text-decoration: none; }
+  .act svg { width: 20px; height: 20px; transition: transform .3s var(--ease); }
+  .act:hover { border-color: var(--text); box-shadow: var(--shadow); }
+  .act:hover svg { transform: translateY(-2px); }
+  .act:active { transform: scale(.95); }
+  .act.done { background: var(--text); color: #fff; border-color: var(--text); }
+  .qr { display: grid; justify-items: center; gap: 12px; margin-top: 16px; padding: 18px; border-radius: 12px; background: var(--surface-2); animation: rise .35s var(--ease); }
+  .qr-box { padding: 14px; background: #fff; border-radius: 12px; line-height: 0; box-shadow: var(--shadow); }
+  .qr-box img, .qr-box canvas { width: 180px; height: 180px; }
+
+  /* Masse & historique */
+  textarea.mini { min-height: 150px; resize: vertical; font-family: var(--mono); font-size: 13.5px; line-height: 1.6; }
+  .list { display: grid; gap: 4px; margin-top: 14px; }
+  .item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border-radius: 12px; transition: background .2s; animation: rise .35s both var(--ease); }
+  .item:hover { background: var(--surface-2); }
+  .item .thumb { width: 60px; }
+  .item code { font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item small { color: var(--muted); font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item.bad small { color: var(--danger); }
+  .empty { text-align: center; color: var(--muted); padding: 36px 10px; font-size: 15px; }
+  .empty svg { width: 32px; height: 32px; color: var(--text); margin-bottom: 8px; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; color: var(--muted); }
+
+  footer { border-top: 1px solid var(--line-soft); background: var(--surface-2); margin-inline: -16px; padding: 24px 16px 36px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: space-between; }
+
+  /* Toast façon bulle Airbnb */
+  .toast { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px) scale(.96); opacity: 0; z-index: 60;
+           background: #fff; color: var(--text); padding: 14px 20px; border-radius: 16px; font-weight: 600; font-size: 15px; box-shadow: var(--shadow-lg);
+           transition: .35s var(--ease); pointer-events: none; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
+  .toast::before { content: ""; width: 22px; height: 22px; border-radius: 50%; flex: none;
+                   background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/13px no-repeat; }
+  .toast.show { transform: translate(-50%, 0) scale(1); opacity: 1; }
+
+  .warn { margin-top: 16px; font-size: 13px; color: var(--muted); display: flex; gap: 8px; }
+  .warn::before { content: "i"; flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--text); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; font-family: Georgia, serif; }
+
+  /* Entrée douce */
+  .in { animation: enter .7s var(--ease) both; }
+  .d1 { animation-delay: .04s; } .d2 { animation-delay: .1s; } .d3 { animation-delay: .16s; } .d4 { animation-delay: .22s; } .d5 { animation-delay: .28s; }
+  @keyframes enter { from { opacity: 0; transform: translateY(14px); } }
+
+  /* ─── Page d'ouverture ─── */
+  #redir { display: none; }
+  .is-redirect #app { display: none; }
+  .is-redirect #redir { display: grid; min-height: 100vh; place-items: center; text-align: center; padding-block: 40px; }
+  .r-card { width: 100%; max-width: 380px; display: grid; gap: 16px; justify-items: center; }
+  .ring { position: relative; width: 136px; height: 136px; display: grid; place-items: center; margin-bottom: 6px; }
+  .ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+                  background: conic-gradient(from var(--ang), transparent 0 60%, var(--accent) 100%); animation: spin 1s linear infinite;
+                  mask: radial-gradient(circle, transparent 63px, #000 64px); -webkit-mask: radial-gradient(circle, transparent 63px, #000 64px); }
+  @keyframes spin { to { --ang: 360deg; } }
+  .ring .core { width: 116px; height: 116px; border-radius: 50%; background: var(--surface-2) center/cover; display: grid; place-items: center; box-shadow: var(--shadow); }
+  .ring .core svg { width: 36px; height: 36px; color: var(--accent); }
+  .r-card h1 { font-size: 26px; margin: 0; }
+  .r-card p { color: var(--muted); margin: 0 0 6px; font-size: 16px; }
+  .r-card .cta { margin-top: 0; text-decoration: none; }
+  .r-card .ghost { width: 100%; padding: 13px; text-decoration: none; text-align: center; display: block; font-size: 15px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
+<!-- ═══════════ GÉNÉRATEUR ═══════════ -->
+<div id="app">
+  <header class="topbar">
+    <nav class="wrap">
+      <a class="brand" href="./">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 18.5a5.5 5.5 0 0 0 7.8 0l4.2-4.2a5.5 5.5 0 0 0-7.8-7.8l-1.3 1.3"/><path d="M18.5 13.5a5.5 5.5 0 0 0-7.8 0l-4.2 4.2a5.5 5.5 0 0 0 7.8 7.8l1.3-1.3"/></svg>
+        deeplnk
+      </a>
+      <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><span>Aucune donnée collectée</span></span>
+    </nav>
+  </header>
 
-<!-- Mode générateur -->
-<div class="card" id="gen" style="display:none">
-  <h1>YouTube Deep Link</h1>
-  <p>Colle un lien YouTube (vidéo, Short, chaîne, playlist, live). Le lien généré ouvrira directement l'app YouTube depuis Instagram, TikTok, etc.</p>
-  <input id="src" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
-  <button id="make">Générer le deep link</button>
-  <div class="err" id="err">Lien YouTube non reconnu.</div>
-  <div class="out" id="out"></div>
-  <button id="copy" class="secondary" style="display:none">Copier</button>
-  <div class="warn" id="warn">⚠️ Page ouverte en local : « TON-SITE » est un exemple. Mets la page en ligne (Netlify, GitHub Pages…) pour obtenir de vrais liens qui fonctionnent.</div>
+  <main class="wrap">
+    <section class="hero">
+      <div class="in d1">
+        <div class="eyebrow">Générateur de deep links YouTube</div>
+        <h1>Tes liens sortent enfin <span class="shift">d'Instagram.</span></h1>
+      </div>
+      <p class="lede in d2">Colle un lien YouTube : tu obtiens un lien qui ouvre directement l'app YouTube, au lieu du navigateur intégré d'Instagram ou de TikTok.</p>
+
+      <div class="route in d3" aria-label="Instagram, puis ton lien, puis l'app YouTube">
+        <div class="track"><div class="spark"></div></div>
+        <div class="node"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></i>Instagram</div>
+        <div class="node mid"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></i>Ton lien</div>
+        <div class="node end"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg></i>App YouTube</div>
+      </div>
+    </section>
+
+    <section class="more">
+      <hr class="sep">
+      <div class="facts in d4">
+        <div class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M11 18.5h2"/></svg><div><strong>Android : ouverture directe</strong><span>L'app YouTube s'ouvre sur la bonne vidéo, sans étape.</span></div></div>
+        <div class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3.5c-1.5 0-3 1-3.5 2.5"/><path d="M12 7c-1.2-1-4.5-1.3-6 1.2S5 15 7 18c1 1.5 2 2.5 3 2.5s1.3-.6 2-.6 1.1.6 2 .6 2.3-1.4 3.2-3c-2-1-2.4-4.3-.2-5.6-.8-1.9-3-2.7-5-1.9"/></svg><div><strong>iPhone : app ou bouton</strong><span>Ouverture automatique, avec un bouton de secours si besoin.</span></div></div>
+        <div class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg><div><strong>Zéro donnée</strong><span>Pas de compte, pas de suivi : tout se passe dans ton navigateur.</span></div></div>
+      </div>
+      <hr class="sep">
+      <div class="how in d5">
+        <h2>Comment ça marche</h2>
+        <div class="step"><b>1</b><span><strong>Colle un lien YouTube</strong> : vidéo, Short, live, playlist ou chaîne.</span></div>
+        <div class="step"><b>2</b><span><strong>Personnalise-le</strong> si tu veux : format court, libellé, moment de départ, couleur.</span></div>
+        <div class="step"><b>3</b><span><strong>Partage-le</strong> dans ta bio, tes stories ou en QR code.</span></div>
+      </div>
+    </section>
+
+    <section class="tool in d2">
+      <div class="tool-in" id="toolIn">
+        <div class="tabs" role="tablist">
+          <span class="ind" id="ind"></span>
+          <button role="tab" id="tab-one" aria-selected="true" data-p="one"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Un lien</button>
+          <button role="tab" id="tab-bulk" aria-selected="false" data-p="bulk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>En masse</button>
+          <button role="tab" id="tab-hist" aria-selected="false" data-p="hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Historique</button>
+        </div>
+
+        <!-- Un lien -->
+        <div class="panel" id="p-one">
+          <div class="field">
+            <div class="fl">
+              <label for="src">Lien YouTube</label>
+              <input id="src" type="url" inputmode="url" placeholder="https://youtu.be/…" autocomplete="off" spellcheck="false" value="https://youtu.be/2L8YOSQBazM?si=tbWuGDOXJ680T7rZ">
+            </div>
+            <button class="ghost" id="paste" type="button">Coller</button>
+          </div>
+
+          <div class="detect" id="detect"></div>
+
+          <details class="opts" id="opts">
+            <summary>Personnaliser <span class="count" id="optCount">par défaut</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></summary>
+            <div class="opt-grid">
+              <div class="row">
+                <span>Format du lien</span>
+                <div class="seg" data-opt="format">
+                  <button type="button" data-v="classic" aria-pressed="true">Classique ?v=</button>
+                  <button type="button" data-v="short" aria-pressed="false">Court /v/</button>
+                </div>
+                <small>Le format court donne des liens plus lisibles. Il nécessite le fichier <code>404.html</code> sur ton site.</small>
+              </div>
+              <div class="two">
+                <div class="row">
+                  <span>Libellé</span>
+                  <input class="mini mono" id="label" placeholder="mon-clip" maxlength="40" autocomplete="off">
+                  <small>Visible dans le lien, décoratif.</small>
+                </div>
+                <div class="row">
+                  <span>Démarrer à</span>
+                  <input class="mini mono" id="start" placeholder="1:23" inputmode="numeric" autocomplete="off">
+                  <small>Vidéos uniquement.</small>
+                </div>
+              </div>
+              <div class="row">
+                <span>Ailleurs qu'Instagram / TikTok</span>
+                <div class="seg" data-opt="mode">
+                  <button type="button" data-v="app" aria-pressed="true">Forcer l'app</button>
+                  <button type="button" data-v="web" aria-pressed="false">Sans pop-up</button>
+                </div>
+                <small>« Sans pop-up » : sur WhatsApp, Safari…, pas de question « Ouvrir avec YouTube ? ». Le lien peut alors rester dans le navigateur.</small>
+              </div>
+              <div class="row">
+                <span>Couleur de la page d'ouverture</span>
+                <div class="swatches" id="swatches"></div>
+              </div>
+            </div>
+          </details>
+
+          <button class="cta" id="make" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+            Créer le deep link
+          </button>
+
+          <div class="result" id="result" hidden>
+            <div class="link" id="out"></div>
+            <div class="actions">
+              <button class="act" id="copy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Copier</span></button>
+              <button class="act" id="share" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span>Partager</span></button>
+              <a class="act" id="test" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7M21 3l-9 9"/><path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg><span>Tester</span></a>
+              <button class="act" id="qrBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg><span>QR code</span></button>
+            </div>
+            <div class="qr" id="qr" hidden>
+              <div class="qr-box" id="qrBox"></div>
+              <button class="ghost" id="qrDl" type="button">Télécharger le PNG</button>
+            </div>
+          </div>
+          <div class="warn" id="warn" hidden>Page ouverte en local : « ton-site.github.io » est un exemple. Mets la page en ligne pour obtenir de vrais liens.</div>
+        </div>
+
+        <!-- En masse -->
+        <div class="panel" id="p-bulk" hidden>
+          <textarea class="mini" id="bulkIn" aria-label="Un lien YouTube par ligne" placeholder="Un lien par ligne&#10;https://youtu.be/…&#10;https://youtube.com/shorts/…&#10;https://youtube.com/@…"></textarea>
+          <button class="cta" id="bulkGo" type="button">Tout convertir</button>
+          <div class="bar" id="bulkBar" hidden><span id="bulkStat"></span><button class="ghost" id="bulkCopy" type="button">Tout copier</button></div>
+          <div class="list" id="bulkList"></div>
+        </div>
+
+        <!-- Historique -->
+        <div class="panel" id="p-hist" hidden>
+          <div class="list" id="histList"></div>
+          <div class="bar"><span>Enregistré uniquement sur cet appareil.</span><button class="ghost" id="histClear" type="button">Effacer</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>© deeplnk · aucun compte, aucun suivi, aucune donnée envoyée</span>
+      <span>Non affilié à YouTube ni à Google</span>
+    </div>
+  </footer>
 </div>
 
-<!-- Mode redirection -->
-<div class="card center" id="redir" style="display:none">
-  <div class="logo"></div>
-  <h1>Ouverture de YouTube…</h1>
-  <p>Si l'application ne s'ouvre pas automatiquement, appuie sur le bouton.</p>
-  <a class="btn" id="openApp" href="#">Ouvrir dans l'app YouTube</a>
-  <a class="btn secondary" id="openWeb" href="#">Regarder dans le navigateur</a>
+<!-- ═══════════ PAGE D'OUVERTURE ═══════════ -->
+<div id="redir">
+  <div class="r-card">
+    <div class="ring"><div class="core" id="rThumb"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 7.5v9l7.5-4.5z"/></svg></div></div>
+    <h1>Ouverture de YouTube…</h1>
+    <p>Si l'application ne s'ouvre pas toute seule, appuie sur le bouton.</p>
+    <a class="cta" id="openApp" href="#">Ouvrir dans l'app YouTube</a>
+    <a class="ghost" id="openWeb" href="#">Regarder dans le navigateur</a>
+  </div>
 </div>
 
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 <script>
-// Transforme n'importe quel lien YouTube en chemin normalisé (ex: "watch?v=ID", "shorts/ID", "@chaine")
-function toPath(input) {
-  let s = (input || "").trim();
-  if (!s) return null;
-  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
-  let u;
-  try { u = new URL(s); } catch { return null; }
-  const host = u.hostname.replace(/^(www\.|m\.|music\.)/, "");
-  if (host === "youtu.be") {
-    const id = u.pathname.slice(1).split("/")[0];
-    if (!id) return null;
-    const t = u.searchParams.get("t");
-    return "watch?v=" + id + (t ? "&t=" + t : "");
-  }
-  if (host !== "youtube.com") return null;
-  const path = u.pathname.replace(/^\/+/, "");
-  if (path === "watch") {
-    const v = u.searchParams.get("v");
-    if (!v) return null;
-    const keep = new URLSearchParams({ v });
-    ["t", "list"].forEach(k => u.searchParams.get(k) && keep.set(k, u.searchParams.get(k)));
-    return "watch?" + keep.toString();
-  }
-  if (path === "playlist") {
-    const list = u.searchParams.get("list");
-    return list ? "playlist?list=" + list : null;
-  }
-  if (/^(shorts|live|embed)\//.test(path)) {
-    const [kind, id] = path.split("/");
-    return kind === "embed" ? "watch?v=" + id : kind + "/" + id;
-  }
-  if (/^(@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)/.test(path)) return path.replace(/\/$/, "");
-  return path ? path : null;
-}
+const THEMES = { rouge: "#FF385C", mint: "#22D3B6", violet: "#9B8CFF", coral: "#FF6B5A", gold: "#F5B942", sky: "#4FB3FF", rose: "#FF5FA2" };
+const $ = s => document.querySelector(s);
 
-// Chemin YouTube -> paramètres courts et sans encodage (ex: "watch?v=ID" -> "v=ID")
-function toQuery(path) {
-  if (path.startsWith("watch?")) return path.slice(6);
-  if (path.startsWith("playlist?")) return path.slice(9);
-  const m = path.match(/^(shorts|live)\/([\w-]+)/);
-  if (m) return (m[1] === "shorts" ? "s=" : "live=") + m[2];
-  return "c=" + path;
-}
-
+/* ─── Page d'ouverture ─── */
 if (window.__yt) {
-  // ---------- REDIRECTION (déjà lancée dans <head>, ici on affiche juste les boutons de secours) ----------
-  document.getElementById("redir").style.display = "block";
-  document.getElementById("openApp").href = window.__yt.app;
-  document.getElementById("openWeb").href = window.__yt.web;
-} else {
-  // ---------- GÉNÉRATEUR ----------
-  document.getElementById("gen").style.display = "block";
-  // En local / dans un aperçu, il n'y a pas de vraie adresse : on met un exemple à remplacer
-  const isOnline = /^https?:$/.test(location.protocol) && location.origin !== "null";
-  const base = isOnline ? location.origin + location.pathname : "https://TON-SITE.netlify.app/";
-  if (!isOnline) document.getElementById("warn").style.display = "block";
-
-  const src = document.getElementById("src"), out = document.getElementById("out"),
-        err = document.getElementById("err"), copy = document.getElementById("copy");
-
-  function make() {
-    const path = toPath(src.value);
-    if (!path) { err.style.display = "block"; out.style.display = copy.style.display = "none"; return; }
-    err.style.display = "none";
-    const link = base + "?" + toQuery(path);
-    out.textContent = link;
-    out.style.display = copy.style.display = "block";
-    copy.textContent = "Copier";
+  const y = window.__yt;
+  if (THEMES[y.th]) {
+    document.documentElement.style.setProperty("--accent", THEMES[y.th]);
+    document.querySelectorAll("#redir .cta").forEach(c => c.style.background = THEMES[y.th]);
   }
-  document.getElementById("make").onclick = make;
-  src.addEventListener("keydown", e => e.key === "Enter" && make());
-  copy.onclick = async () => {
-    try { await navigator.clipboard.writeText(out.textContent); copy.textContent = "Copié ✓"; }
-    catch {
-      // Repli si le presse-papiers est bloqué
-      const r = document.createRange(); r.selectNodeContents(out);
-      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      copy.textContent = document.execCommand("copy") ? "Copié ✓" : "Lien sélectionné : fais Cmd/Ctrl + C";
+  $("#openApp").href = y.app;
+  $("#openWeb").href = y.web;
+  if (y.id) {
+    const core = $("#rThumb");
+    core.style.backgroundImage = `url(https://i.ytimg.com/vi/${y.id}/hqdefault.jpg)`;
+    core.innerHTML = "";
+  }
+} else {
+  initGenerator();
+}
+
+function initGenerator() {
+  /* ─── Analyse d'un lien YouTube ─── */
+  function parse(input) {
+    let s = (input || "").trim();
+    if (!s) return null;
+    if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+    let u; try { u = new URL(s); } catch { return null; }
+    const host = u.hostname.replace(/^(www\.|m\.|music\.)/, "");
+    const ok = /^[A-Za-z0-9_-]+$/;
+    const t = (u.searchParams.get("t") || "").replace(/s$/, "");
+    const tt = /^[0-9hms]+$/.test(t) ? t : null;
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1).split("/")[0];
+      return ok.test(id) ? { type: "video", id, t: tt, list: u.searchParams.get("list") } : null;
     }
+    if (host !== "youtube.com") return null;
+    const path = u.pathname.replace(/^\/+|\/+$/g, "");
+    if (path === "watch") {
+      const id = u.searchParams.get("v");
+      return id && ok.test(id) ? { type: "video", id, t: tt, list: u.searchParams.get("list") } : null;
+    }
+    if (path === "playlist") {
+      const list = u.searchParams.get("list");
+      return list && ok.test(list) ? { type: "playlist", list } : null;
+    }
+    let m;
+    if ((m = path.match(/^(shorts|live|embed)\/([A-Za-z0-9_-]+)/))) {
+      return { type: m[1] === "embed" ? "video" : m[1] === "shorts" ? "short" : "live", id: m[2] };
+    }
+    if ((m = path.match(/^(@[\w.-]+|(?:channel|c|user)\/[\w.-]+)/))) return { type: "channel", handle: m[1] };
+    return null;
+  }
+
+  const TYPE_LABEL = { video: "Vidéo", short: "Short", live: "Live", playlist: "Playlist", channel: "Chaîne" };
+
+  /* ─── Adresse de base du site ─── */
+  const online = /^https?:$/.test(location.protocol) && location.origin !== "null";
+  const BASE = online ? location.origin + location.pathname.replace(/[^/]*$/, "") : "https://ton-site.github.io/";
+  if (!online) $("#warn").hidden = false;
+
+  /* ─── Options (mémorisées sur cet appareil) ─── */
+  const opts = { format: "classic", mode: "app", theme: "rouge" };
+  try { Object.assign(opts, JSON.parse(localStorage.getItem("dl_opts") || "{}")); } catch {}
+  const saveOpts = () => { try { localStorage.setItem("dl_opts", JSON.stringify(opts)); } catch {} };
+
+  document.querySelectorAll(".seg").forEach(seg => {
+    const key = seg.dataset.opt;
+    seg.querySelectorAll("button").forEach(b => {
+      b.setAttribute("aria-pressed", b.dataset.v === opts[key]);
+      b.onclick = () => {
+        opts[key] = b.dataset.v; saveOpts();
+        seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+        refreshCount(); if (!$("#result").hidden) make(false);
+      };
+    });
+  });
+  const sw = $("#swatches");
+  Object.entries(THEMES).forEach(([name, color]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "sw"; b.style.background = color; b.title = name;
+    b.setAttribute("aria-label", "Couleur " + name);
+    b.setAttribute("aria-pressed", name === opts.theme);
+    b.onclick = () => {
+      opts.theme = name; saveOpts();
+      sw.querySelectorAll(".sw").forEach(x => x.setAttribute("aria-pressed", x === b));
+      refreshCount(); if (!$("#result").hidden) make(false);
+    };
+    sw.appendChild(b);
+  });
+
+  const slug = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  function toSeconds(s) {
+    s = (s || "").trim(); if (!s) return null;
+    if (/^\d+$/.test(s)) return +s;
+    const p = s.split(":").map(Number);
+    if (p.some(isNaN) || p.length > 3) return undefined;
+    return p.reduce((a, n) => a * 60 + n, 0);
+  }
+  function refreshCount() {
+    const n = (opts.format !== "classic") + (opts.mode !== "app") + (opts.theme !== "rouge") + !!$("#label").value.trim() + !!$("#start").value.trim();
+    $("#optCount").textContent = n ? n + " option" + (n > 1 ? "s" : "") + " active" + (n > 1 ? "s" : "") : "par défaut";
+  }
+  ["#label", "#start"].forEach(s => $(s).addEventListener("input", () => { refreshCount(); if (!$("#result").hidden) make(false); }));
+
+  /* ─── Construction du lien ─── */
+  function build(info, extra = {}) {
+    const q = new URLSearchParams();
+    const short = opts.format === "short";
+    let seg = "";
+    switch (info.type) {
+      case "video": short ? seg = "v/" + info.id : q.set("v", info.id); if (info.list && /^[\w-]+$/.test(info.list)) q.set("list", info.list); break;
+      case "short": short ? seg = "s/" + info.id : q.set("s", info.id); break;
+      case "live": short ? seg = "live/" + info.id : q.set("live", info.id); break;
+      case "playlist": short ? seg = "list/" + info.list : q.set("list", info.list); break;
+      case "channel": short && info.handle.startsWith("@") ? seg = info.handle : q.set("c", info.handle); break;
+    }
+    const t = extra.t != null ? extra.t : info.t;
+    if (t && info.type === "video") q.set("t", t);
+    if (opts.mode === "web") q.set("o", "w");
+    if (opts.theme !== "rouge") q.set("th", opts.theme);
+    if (extra.label) seg ? seg += "/" + extra.label : q.set("n", extra.label);
+    const qs = q.toString().replace(/%40/g, "@").replace(/%2F/g, "/");
+    return BASE + seg + (qs ? "?" + qs : "");
+  }
+
+  /* ─── Aperçu ─── */
+  const detect = $("#detect");
+  const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 7.5v9l7.5-4.5z"/></svg>';
+  const listIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h12M4 12h12M4 18h8M18 15l4 3-4 3z"/></svg>';
+  const userIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
+  let titleCache = {}, lastKey = "";
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function thumbHTML(info, cls = "thumb") {
+    if (info.id) return `<div class="${cls}" style="background-image:url(https://i.ytimg.com/vi/${info.id}/mqdefault.jpg)"></div>`;
+    return `<div class="${cls}">${info.type === "channel" ? userIcon : listIcon}</div>`;
+  }
+  function describe(info) {
+    if (info.type === "channel") return info.handle;
+    if (info.type === "playlist") return "Playlist " + info.list.slice(0, 14) + "…";
+    return titleCache[info.id] || "ID " + info.id;
+  }
+  function renderDetect() {
+    const v = $("#src").value.trim();
+    const info = parse(v);
+    if (!v) { lastKey = ""; detect.className = "detect"; detect.innerHTML = `<div class="thumb">${playIcon}</div><div class="meta"><strong>En attente d'un lien</strong><span>Vidéo, Short, live, playlist ou chaîne</span></div>`; return null; }
+    if (!info) { lastKey = ""; detect.className = "detect bad"; detect.innerHTML = `<div class="thumb">${playIcon}</div><div class="meta"><strong>Lien non reconnu</strong><span>Colle un lien youtube.com ou youtu.be</span></div>`; return null; }
+    const key = JSON.stringify(info);
+    if (key !== lastKey) {
+      lastKey = key;
+      detect.className = "detect on";
+      detect.innerHTML = `${thumbHTML(info)}<div class="meta"><strong id="dTitle">${esc(describe(info))}</strong><span><span class="chip">${TYPE_LABEL[info.type]}</span>${info.t ? "à " + esc(info.t) + " s" : "détecté"}</span></div>`;
+      if (info.id && !titleCache[info.id] && online) {
+        fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + info.id))
+          .then(r => r.ok ? r.json() : null).then(d => {
+            if (!d || !d.title) return;
+            titleCache[info.id] = d.title;
+            const el = $("#dTitle"); if (el && lastKey === key) el.textContent = d.title;
+          }).catch(() => {});
+      }
+    }
+    return info;
+  }
+  $("#src").addEventListener("input", () => { renderDetect(); $("#result").hidden = true; });
+
+  $("#paste").onclick = async () => {
+    try { const t = await navigator.clipboard.readText(); $("#src").value = t; renderDetect(); make(true); }
+    catch { $("#src").focus(); toast("Colle le lien avec Cmd + V"); }
   };
+
+  /* ─── Génération ─── */
+  let current = "";
+  function make(animate = true) {
+    const info = renderDetect();
+    if (!info) {
+      if (animate) { $("#src").focus(); detect.animate([{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(0)" }], { duration: 300 }); }
+      return;
+    }
+    const sec = toSeconds($("#start").value);
+    if (sec === undefined) { toast("Format de départ : 1:23 ou 83"); return; }
+    const label = slug($("#label").value);
+    current = build(info, { t: sec, label });
+    const baseTxt = current.slice(0, BASE.length), rest = current.slice(BASE.length);
+    const out = $("#out");
+    $("#result").hidden = false;
+    $("#test").href = current;
+    $("#qr").hidden = true;
+    $("#copy").classList.remove("done"); $("#copy").querySelector("span").textContent = "Copier";
+    if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) scramble(out, baseTxt, rest);
+    else out.innerHTML = `<span class="base">${esc(baseTxt)}</span><span class="hl">${esc(rest)}</span>`;
+    if (animate) { burst($("#make")); saveHistory(info, current); }
+  }
+  $("#make").onclick = () => make(true);
+  $("#src").addEventListener("keydown", e => { if (e.key === "Enter") make(true); });
+
+  function scramble(el, base, rest) {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789-_";
+    const total = rest.length; let frame = 0;
+    const tick = () => {
+      frame++;
+      const done = Math.floor(frame * 1.6);
+      let s = rest.slice(0, done);
+      for (let k = done; k < total; k++) s += chars[(Math.random() * chars.length) | 0];
+      el.innerHTML = `<span class="base">${esc(base)}</span><span class="hl">${esc(s)}</span>`;
+      if (done < total) requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  function burst(btn) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = btn.getBoundingClientRect(), cs = getComputedStyle(document.documentElement);
+    const colors = [cs.getPropertyValue("--accent").trim(), cs.getPropertyValue("--accent-dark").trim(), "#FFB3C1"];
+    for (let k = 0; k < 18; k++) {
+      const p = document.createElement("span");
+      p.className = "particle";
+      p.style.background = colors[k % 3];
+      p.style.left = r.left + r.width / 2 + "px"; p.style.top = r.top + r.height / 2 + "px";
+      document.body.appendChild(p);
+      const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 90;
+      p.animate([{ transform: "translate(-50%,-50%) scale(1)", opacity: 1 },
+                 { transform: `translate(calc(-50% + ${Math.cos(a) * d}px), calc(-50% + ${Math.sin(a) * d - 30}px)) scale(0)`, opacity: 0 }],
+                { duration: 700 + Math.random() * 400, easing: "cubic-bezier(.2,.8,.3,1)" }).onfinish = () => p.remove();
+    }
+  }
+
+  /* ─── Actions ─── */
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch {
+      const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok;
+    }
+  }
+  $("#copy").onclick = async () => {
+    const ok = await copyText(current);
+    toast(ok ? "Lien copié" : "Copie impossible, sélectionne le lien");
+    if (ok) { $("#copy").classList.add("done"); $("#copy").querySelector("span").textContent = "Copié"; }
+  };
+  $("#share").onclick = async () => {
+    if (navigator.share) { try { await navigator.share({ url: current }); } catch {} }
+    else { await copyText(current); toast("Partage indisponible ici : lien copié"); }
+  };
+  $("#qrBtn").onclick = () => {
+    const box = $("#qrBox");
+    if (!window.QRCode) { toast("QR code indisponible hors ligne"); return; }
+    if (!$("#qr").hidden) { $("#qr").hidden = true; return; }
+    box.innerHTML = "";
+    new QRCode(box, { text: current, width: 540, height: 540, colorDark: "#0B0D12", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+    $("#qr").hidden = false;
+  };
+  $("#qrDl").onclick = () => {
+    const c = $("#qrBox canvas"); if (!c) return;
+    const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = "deeplink-qr.png"; a.click();
+  };
+
+  /* ─── Historique (cet appareil uniquement) ─── */
+  const H_KEY = "dl_history";
+  const readH = () => { try { return JSON.parse(localStorage.getItem(H_KEY) || "[]"); } catch { return []; } };
+  function saveHistory(info, link) {
+    const h = readH().filter(x => x.link !== link);
+    h.unshift({ info, link, title: describe(info), at: Date.now() });
+    try { localStorage.setItem(H_KEY, JSON.stringify(h.slice(0, 40))); } catch {}
+  }
+  function renderHist() {
+    const h = readH(), list = $("#histList");
+    if (!h.length) { list.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><br>Aucun lien pour l'instant.<br>Ceux que tu crées apparaîtront ici.</div>`; return; }
+    list.innerHTML = h.map((x, k) => `<div class="item" style="animation-delay:${k * 30}ms">${thumbHTML(x.info)}<div style="min-width:0"><code>${esc(x.link)}</code><small>${esc(titleCache[x.info.id] || x.title)} · ${new Date(x.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></div><button class="ghost" data-copy="${esc(x.link)}" type="button">Copier</button></div>`).join("");
+  }
+  $("#histClear").onclick = () => { try { localStorage.removeItem(H_KEY); } catch {} renderHist(); toast("Historique effacé"); };
+
+  /* ─── En masse ─── */
+  let bulkLinks = [];
+  $("#bulkGo").onclick = () => {
+    const lines = $("#bulkIn").value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+    if (!lines.length) { $("#bulkIn").focus(); return; }
+    bulkLinks = [];
+    $("#bulkList").innerHTML = lines.map((l, k) => {
+      const info = parse(l);
+      if (!info) return `<div class="item bad" style="animation-delay:${k * 40}ms"><div class="thumb">${playIcon}</div><div style="min-width:0"><code>${esc(l)}</code><small>Lien non reconnu</small></div><span></span></div>`;
+      const link = build(info); bulkLinks.push(link);
+      return `<div class="item" style="animation-delay:${k * 40}ms">${thumbHTML(info)}<div style="min-width:0"><code>${esc(link)}</code><small>${TYPE_LABEL[info.type]} · ${esc(describe(info))}</small></div><button class="ghost" data-copy="${esc(link)}" type="button">Copier</button></div>`;
+    }).join("");
+    $("#bulkBar").hidden = false;
+    $("#bulkStat").textContent = `${bulkLinks.length} lien${bulkLinks.length > 1 ? "s" : ""} converti${bulkLinks.length > 1 ? "s" : ""} sur ${lines.length}`;
+    burst($("#bulkGo"));
+  };
+  $("#bulkCopy").onclick = async () => { if (bulkLinks.length && await copyText(bulkLinks.join("\n"))) toast(bulkLinks.length + " liens copiés"); };
+  document.addEventListener("click", async e => {
+    const b = e.target.closest("[data-copy]"); if (!b) return;
+    if (await copyText(b.dataset.copy)) { b.textContent = "Copié"; toast("Lien copié"); setTimeout(() => b.textContent = "Copier", 1500); }
+  });
+
+  /* ─── Onglets ─── */
+  const tabs = [...document.querySelectorAll(".tabs button")], ind = $("#ind");
+  function place(btn) { ind.style.width = btn.offsetWidth + "px"; ind.style.transform = `translateX(${btn.offsetLeft}px)`; }
+  tabs.forEach(t => t.onclick = () => {
+    tabs.forEach(x => x.setAttribute("aria-selected", x === t));
+    ["one", "bulk", "hist"].forEach(p => $("#p-" + p).hidden = p !== t.dataset.p);
+    if (t.dataset.p === "hist") renderHist();
+    place(t);
+  });
+  requestAnimationFrame(() => place(tabs[0]));
+  addEventListener("resize", () => place(tabs.find(t => t.getAttribute("aria-selected") === "true")));
+
+  /* ─── Reflet du bouton qui suit le curseur ─── */
+  document.querySelectorAll(".cta").forEach(btn => btn.addEventListener("pointermove", e => {
+    const r = btn.getBoundingClientRect();
+    btn.style.setProperty("--px", ((e.clientX - r.left) / r.width * 100).toFixed(1));
+    btn.style.setProperty("--py", ((e.clientY - r.top) / r.height * 100).toFixed(1));
+  }));
+
+  refreshCount();
+  make(false);
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1900);
 }
 </script>
 </body>

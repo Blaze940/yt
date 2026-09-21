@@ -11,7 +11,7 @@ Un clic, et l'app YouTube s'ouvre directement sur la bonne vidéo.
 ![Sans tracking](https://img.shields.io/badge/tracking-aucun-222222?style=for-the-badge)
 ![Statique](https://img.shields.io/badge/100%25-statique-FF385C?style=for-the-badge)
 
-**👉 [Ouvrir le générateur](https://blaze940.github.io/NOM-DU-DEPOT/)**
+**👉 [Ouvrir le générateur](https://blaze940.github.io/yt/)**
 
 </div>
 
